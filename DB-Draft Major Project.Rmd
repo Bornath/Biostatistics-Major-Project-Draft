@@ -1,0 +1,154 @@
+---
+title: "DB-Biostatistics Draft Major Project"
+author: "Derek Bornath"
+date: "16/03/2020"
+output: html_document
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(nlme)
+library(car)
+library(ez)
+library(afex)
+library(ggplot2)
+library(emmeans)
+library(gvlma)
+```
+
+#Starting by reading in the data set
+```{r}
+EMRL=read.csv('EMRL.Ghr.GLP-1.App.csv')
+View(EMRL)
+```
+
+
+##Running an anova to determine if there are any differences between menstrual phase and appetite surpressing hormone GLP-1
+```{r}
+EMRL.anova2=aov_ez(data=EMRL,
+  id= "Participant",
+  within = c("Phase","Time"),
+  dv="GLP.1",
+  type="3"
+)
+summary(EMRL.anova2)
+```
+#After we will run a post hoc test to determine where the interactions occur.
+```{r}
+con.GLP.1 <- lsmeans(EMRL.anova2$aov,~Phase|Time)
+con.GLP.1 <- lsmeans(EMRL.anova2$aov,~Time*Phase)
+
+con.GLP.1
+contrast(con.GLP.1,method="pairwise")
+
+```
+
+##Lastly we will determine if there is differences between menstrual phase and overall appetite perception
+```{r}
+EMRL.anova3=aov_ez(data=EMRL,
+  id= "Participant",
+  within = c("Phase","Time"),
+  dv="Appetite",
+  type="3"
+)
+summary(EMRL.anova3)
+```
+
+#This will be followed again by a post hoc test to determine where interactions occur.
+```{r}
+con.App <- lsmeans(EMRL.anova3$aov,~Phase|Time)
+con.App <- lsmeans(EMRL.anova3$aov,~Time*Phase)
+
+con.App
+contrast(con.App,method="pairwise")
+
+```
+
+#Next we will create an interaction plot to depict these analyses.
+```{r}
+interaction.plot(EMRL$Time,EMRL$Phase,EMRL$GLP.1, xlab = 'Exercise Time Points', ylab = 'GLP-1 Concentration (pM/mL-1)')
+interaction.plot(EMRL$Time,EMRL$Phase,EMRL$Appetite, xlab = 'Exercise Time Points', ylab = 'Overall Appetite Perception (mm)')
+```
+
+##Since the interaction plots are not easy to read or make connections, we have also completed ggplot histograms to better depict the differences
+```{r}
+ggplot(data=EMRL, aes(x=as.factor(Time), y=GLP.1, fill=Phase)) + 
+  geom_histogram()+
+  xlab("Exercise Time Points")+
+  ylab("Ghrelin (pg/mL-1)")+
+  theme(panel.background = element_rect(fill = "lightcyan3", colour = "lightcyan3",size = 0.5, linetype = "solid"),panel.grid.major = element_line(size = 0.5, linetype ='solid', colour = "white"), panel.grid.minor = element_line(size = 0.25, linetype ='solid',colour = "white"), axis.text=element_text(size=12), axis.title=element_text(size=10,face="bold"),legend.title=element_text(size=12), legend.text=element_text(size=10))+
+  theme(legend.position = c(0.2,0.9))
+```
+
+
+##Lastly we will test the assumptions.#Test assumptions of rm-ANOVA
+
+#Assumptions for a repeated-measures ANOVA:
+#1. Independence of samples 
+#2. Homogeneity of variances among treatments
+#3. Normality of residuals
+#4. Sphericity
+
+#The first assumption can only be validated by understanding how samples were collected, and therefore depends on good experimental design. 
+
+#The second assumption testing for homogeneity of variances, we can use Levene's test
+```{r}
+
+leveneTest(y=EMRL$GLP.1,group=EMRL$Time) # by Time
+
+leveneTest(y=EMRL$GLP.1,group=EMRL$Phase) # by Phase
+
+leveneTest(y=EMRL$Appetite,group=EMRL$Time) # by Time
+
+leveneTest(y=EMRL$Appetite,group=EMRL$Phase) # by Phase
+```
+
+#The third assumption testing for normality of residuals by performing a Shapiro-Wilks test and looking at the distribution through a histogram.
+```{r}
+shapiro.test(residuals(EMRL.anova2$lm)) # for GLP-1
+hist(residuals(EMRL.anova2$lm))
+
+shapiro.test(residuals(EMRL.anova3$lm)) # for Appetite
+hist(residuals(EMRL.anova3$lm))
+```
+
+#Assumption 4 was tested through each ANOVA output.
+
+
+##The other statistical Analysis of my data will be a linear regression to determine any predictor variables in the data. I am reading in the same data again, just organized differently to allow for linear regressions.
+```{r}
+EMRL.Wide=read.csv('EMRL.Ghr.GLP-1.App.Wide.csv')
+View(EMRL.Wide)
+```
+
+#Scatter Plots to compare appetite to appetite hormones immediately Post-Exercise
+```{r}
+plot(EMRL.Wide$FP.APP.Imm.Post ~EMRL.Wide$FP.GLP.1.Imm.Post, main='Comparison of Follicular Phase Appetite to GLP-1 Concentration Post-Exercise', ylab='GLP-1 Concentration (pM/mL-1)', xlab= 'Overall Appetite (mm)')
+
+plot(EMRL.Wide$LP.APP.Imm.Post ~EMRL.Wide$LP.GLP.1.Imm.Post, main='Comparison of Luteal Phase Appetite to GLP-1 Concentration Post-Exercise', ylab='GLP-1 Concentration (pM/mL-1)', xlab= 'Overall Appetite (mm)')
+```
+
+#Performing a linear regression to determine if appetite hormones have an impact on appetite perceptions
+```{r}
+FP.App.GLP.1.comp1=glm(EMRL.Wide$FP.APP.Imm.Post ~EMRL.Wide$FP.GLP.1.Imm.Post)
+summary.lm(FP.App.GLP.1.comp1)
+
+LP.App.GLP.1.comp1=glm(EMRL.Wide$LP.APP.Imm.Post ~EMRL.Wide$LP.GLP.1.Imm.Post)
+summary.lm(LP.App.GLP.1.comp1)
+```
+
+#adding the regression line determined to the scatter plots previously made
+```{r}
+plot(EMRL.Wide$FP.APP.Imm.Post ~EMRL.Wide$FP.GLP.1.Imm.Post, ylab='GLP-1 Concentration (pM/mL-1)', xlab= 'Overall Appetite (mm)')
+abline(FP.App.GLP.1.comp1, col=c('blue'))
+
+plot(EMRL.Wide$LP.APP.Imm.Post ~EMRL.Wide$LP.GLP.1.Imm.Post, ylab='GLP-1 Concentration (pM/mL-1)', xlab= 'Overall Appetite (mm)')
+abline(LP.App.GLP.1.comp1, col=c('blue'))
+```
+
+#Using the gvlma function to determine if the assumptions of a linear regression were met.
+```{r}
+gvlma(lm(FP.App.GLP.1.comp1))
+
+gvlma(lm(LP.App.GLP.1.comp1))
+
+```
